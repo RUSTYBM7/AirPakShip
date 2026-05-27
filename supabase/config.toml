@@ -1,0 +1,16 @@
+# Supabase Edge Functions Configuration
+
+[api]
+enabled = true
+# Uncomment to enable strict CORS
+# extra_cors_allowed_origins = ["https://r2zgk4azaq26.space.minimax.io"]
+
+[edge_runtime]
+enabled = true
+policy = "oneshot"
+
+[analytics]
+enabled = false
+
+[auth]
+enabled = true
