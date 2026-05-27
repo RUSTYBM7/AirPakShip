@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, memo, useMemo } from 'react';
 
 type Theme = 'light' | 'dark';
 
@@ -22,7 +22,7 @@ interface ThemeProviderProps {
   children: React.ReactNode;
 }
 
-export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
+export const ThemeProvider: React.FC<ThemeProviderProps> = memo(({ children }) => {
   const [theme, setThemeState] = useState<Theme>('dark');
   const [mounted, setMounted] = useState(false);
 
@@ -63,20 +63,25 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     setThemeState(prev => prev === 'dark' ? 'light' : 'dark');
   }, []);
 
-  // Prevent flash of wrong theme
+  // Memoize the loading state
+  const loadingContent = useMemo(() => (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="animate-pulse text-slate-400">Loading...</div>
+    </div>
+  ), []);
+
+  // Prevent flash of wrong theme - memoized
   if (!mounted) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="animate-pulse text-slate-400">Loading...</div>
-      </div>
-    );
+    return loadingContent;
   }
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
+    <ThemeContext.Provider value={useMemo(() => ({ theme, toggleTheme, setTheme }), [theme, toggleTheme, setTheme])}>
       {children}
     </ThemeContext.Provider>
   );
-};
+});
+
+ThemeProvider.displayName = 'ThemeProvider';
 
 export default ThemeProvider;

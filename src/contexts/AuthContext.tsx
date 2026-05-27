@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, memo, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { Role, hasPermission, getAccessibleResources, getResourceActions } from '../lib/rbac';
 import { createAuditLog } from '../services/audit';
+import toast from 'react-hot-toast';
 
 interface User {
   id: string;
@@ -13,6 +14,7 @@ interface User {
   last_login?: string;
   avatar_url?: string;
   branch_id?: string;
+  two_factor_enabled?: boolean;
 }
 
 interface AuthContextType {
@@ -38,33 +40,55 @@ export const useAuth = () => {
   return context;
 };
 
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+// Memoize RBAC helper functions
+const createRBACHelpers = (user: User | null) => ({
+  canAccess: (resource: string, action: string): boolean => {
+    if (!user) return false;
+    return hasPermission(user.role, resource, action);
+  },
+  getActions: (resource: string): string[] => {
+    if (!user) return [];
+    return getResourceActions(user.role, resource);
+  },
+  getAllAccessibleResources: (): string[] => {
+    if (!user) return [];
+    return getAccessibleResources(user.role);
+  },
+});
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = memo(({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Demo credentials for testing
-  const demoCredentials = [
-    { email: 'admin@airpak-express.com', password: 'Admin@2024', role: 'super_admin', name: 'Admin User' },
-    { email: 'manager@airpak-express.com', password: 'Manager@2024', role: 'manager', name: 'Manager User' },
-    { email: 'staff@airpak-express.com', password: 'Staff@2024', role: 'staff', name: 'Staff User' },
-  ];
+  // Memoize demo credentials
+  const demoCredentials = useMemo(() => [
+    { email: 'admin@airpak-express.site', password: 'Admin@2024', role: 'super_admin' as Role, name: 'Admin User' },
+    { email: 'manager@airpak-express.site', password: 'Manager@2024', role: 'manager' as Role, name: 'Manager User' },
+    { email: 'staff@airpak-express.site', password: 'Staff@2024', role: 'staff' as Role, name: 'Staff User' },
+  ], []);
 
   useEffect(() => {
     const initAuth = async () => {
       try {
-        // Check for demo user first
+        // Check for demo user first - this is critical for admin login
         const demoUserJson = localStorage.getItem('airpak_demo_user');
         if (demoUserJson) {
-          const demoUser = JSON.parse(demoUserJson);
-          setUser(demoUser);
-          setLoading(false);
-          return;
+          try {
+            const demoUser = JSON.parse(demoUserJson);
+            setUser(demoUser);
+            setLoading(false);
+            return;
+          } catch (e) {
+            console.error('Failed to parse demo user:', e);
+            localStorage.removeItem('airpak_demo_user');
+          }
         }
 
+        // Try Supabase auth
         const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser();
 
-        if (authError && !authError.message.includes('No session')) {
+        if (authError && !authError.message.includes('No session') && !authError.message.includes('Invalid')) {
           throw authError;
         }
 
@@ -97,7 +121,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     initAuth();
 
-    // Listen for auth changes
+    // Listen for auth changes - properly cleaned up
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (session?.user) {
         const { data: profile } = await supabase
@@ -121,20 +145,46 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     try {
       setError(null);
       setLoading(true);
 
+      // Check demo credentials first
+      const demoAccount = demoCredentials.find(
+        acc => acc.email.toLowerCase() === email.toLowerCase() && acc.password === password
+      );
+
+      if (demoAccount) {
+        const demoUser: User = {
+          id: `demo-${Date.now()}`,
+          email: demoAccount.email,
+          full_name: demoAccount.name,
+          role: demoAccount.role,
+          created_at: new Date().toISOString(),
+          two_factor_enabled: true,
+        };
+        localStorage.setItem('airpak_demo_user', JSON.stringify(demoUser));
+        setUser(demoUser);
+        toast.success(`Welcome, ${demoAccount.name}!`);
+        return;
+      }
+
+      // Try Supabase auth
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (authError) throw authError;
+      if (authError) {
+        setError(authError.message || 'Login failed');
+        throw authError;
+      }
 
       if (data.user) {
         // Log the login action
@@ -151,7 +201,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           .eq('id', data.user.id)
           .single();
 
-        setUser({
+        const loggedInUser: User = {
           id: data.user.id,
           email: data.user.email || '',
           full_name: profile?.full_name || data.user.user_metadata?.full_name,
@@ -160,7 +210,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           created_at: data.user.created_at,
           avatar_url: profile?.avatar_url,
           branch_id: profile?.branch_id,
-        });
+        };
+
+        setUser(loggedInUser);
+        toast.success(`Welcome, ${loggedInUser.full_name || 'User'}!`);
       }
     } catch (err: any) {
       setError(err.message || 'Login failed');
@@ -168,9 +221,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } finally {
       setLoading(false);
     }
-  };
+  }, [demoCredentials]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       if (user) {
         await createAuditLog({
@@ -181,13 +234,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
       }
       await supabase.auth.signOut();
+      // Clear demo user
+      localStorage.removeItem('airpak_demo_user');
+      localStorage.removeItem('airpak_remember');
       setUser(null);
+      toast.success('Logged out successfully');
     } catch (err: any) {
       setError(err.message || 'Logout failed');
     }
-  };
+  }, [user]);
 
-  const resetPassword = async (email: string) => {
+  const resetPassword = useCallback(async (email: string) => {
     try {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
@@ -197,27 +254,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setError(err.message || 'Password reset failed');
       throw err;
     }
-  };
+  }, []);
 
-  // RBAC helpers
-  const canAccess = (resource: string, action: string): boolean => {
-    if (!user) return false;
-    return hasPermission(user.role, resource, action);
-  };
+  // Memoize RBAC helpers
+  const rbacHelpers = useMemo(() => createRBACHelpers(user), [user]);
 
-  const getActions = (resource: string): string[] => {
-    if (!user) return [];
-    return getResourceActions(user.role, resource);
-  };
-
-  const getAllAccessibleResources = (): string[] => {
-    if (!user) return [];
-    return getAccessibleResources(user.role);
-  };
+  // Memoize context value to prevent unnecessary re-renders
+  const contextValue = useMemo(() => ({
+    user,
+    loading,
+    error,
+    login,
+    logout,
+    resetPassword,
+    ...rbacHelpers,
+  }), [user, loading, error, login, logout, resetPassword, rbacHelpers]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, error, login, logout, resetPassword, canAccess, getActions, getAllAccessibleResources }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
-};
+});
+
+AuthProvider.displayName = 'AuthProvider';
+
+export default AuthProvider;

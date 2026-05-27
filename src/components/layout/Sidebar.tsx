@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   LayoutDashboard,
   Package,
@@ -10,7 +11,6 @@ import {
   Globe,
   Truck,
   LogOut,
-  Menu,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -56,64 +56,80 @@ interface SidebarProps {
 
 interface NavItem {
   path: string;
-  icon: any;
+  icon: React.ElementType;
   label: string;
   badge?: string;
   submenu?: NavItem[];
 }
 
+// Memoized nav item arrays to prevent recreation on re-renders
+const mainNavItems: NavItem[] = [
+  { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { path: '/shipments', icon: Package, label: 'Shipments' },
+  { path: '/customers', icon: Users, label: 'Customers' },
+  { path: '/businesses', icon: Building2, label: 'Businesses' },
+  { path: '/tracking', icon: Truck, label: 'Tracking' },
+  { path: '/invoices', icon: InvoiceIcon, label: 'Invoices' },
+];
+
+const aiNavItems: NavItem[] = [
+  { path: '/ai-documents', icon: DocumentIcon, label: 'AI Documents', badge: 'NEW' },
+  { path: '/ai-invoices', icon: InvoiceIcon, label: 'AI Invoices', badge: 'NEW' },
+  { path: '/ai-creative', icon: CreativeIcon, label: 'AI Creative', badge: 'NEW' },
+  { path: '/ai-analyst', icon: AnalystIcon, label: 'AI Analyst' },
+];
+
+const toolsNavItems: NavItem[] = [
+  { path: '/email-system', icon: EmailIcon, label: 'Email System' },
+  { path: '/workflows', icon: WorkflowIcon, label: 'AI Workflows', badge: 'NEW' },
+  { path: '/autopilot', icon: AutopilotIcon, label: 'AutoPilot' },
+  { path: '/automation-rules', icon: AutomationIcon, label: 'Automation Rules' },
+  { path: '/document-parser', icon: ParserIcon, label: 'Document Parser' },
+  { path: '/voice-tools', icon: VoiceIcon, label: 'Voice Tools' },
+  { path: '/api-playground', icon: APIIcon, label: 'API Playground' },
+];
+
+const developerNavItems: NavItem[] = [
+  { path: '/developer/skills', icon: Code, label: 'Dev Skill Tester', badge: 'BETA' },
+  { path: '/developer/simulation', icon: Bot, label: 'Admin Simulation', badge: 'BETA' },
+];
+
+const superAdminNavItems: NavItem[] = [
+  { path: '/super-admin/command-center', icon: APIIcon, label: 'Command Center', badge: 'ROOT' },
+];
+
+const adminNavItems: NavItem[] = [
+  { path: '/approvals', icon: ApprovalIcon, label: 'AI Approvals', badge: '5' },
+  { path: '/audit-logs', icon: AuditIcon, label: 'Audit Logs' },
+  { path: '/users', icon: Users, label: 'Users' },
+  { path: '/roles', icon: ShieldCheck, label: 'Roles & Permissions' },
+  { path: '/branches', icon: Building2, label: 'Branches' },
+  { path: '/settings', icon: Settings, label: 'Settings' },
+  { path: '/support', icon: SupportIcon, label: 'Support' },
+  { path: '/tutorial', icon: Book, label: 'Tutorial', badge: 'NEW' },
+];
+
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggleCollapse }) => {
   const location = useLocation();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set(['ai-features', 'tools']));
 
-  const mainNavItems: NavItem[] = [
-    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/shipments', icon: Package, label: 'Shipments' },
-    { path: '/customers', icon: Users, label: 'Customers' },
-    { path: '/businesses', icon: Building2, label: 'Businesses' },
-    { path: '/tracking', icon: Truck, label: 'Tracking' },
-    { path: '/invoices', icon: InvoiceIcon, label: 'Invoices' },
-  ];
+  const handleLogout = useCallback(async () => {
+    try {
+      if (user) {
+        await logout();
+      }
+    } catch (e) {
+      console.error('Logout error:', e);
+    }
+    localStorage.removeItem('airpak_user');
+    localStorage.removeItem('airpak_auth_token');
+    localStorage.removeItem('airpak_demo_user');
+    navigate('/login');
+  }, [user, logout, navigate]);
 
-  const aiNavItems: NavItem[] = [
-    { path: '/ai-documents', icon: DocumentIcon, label: 'AI Documents', badge: 'NEW' },
-    { path: '/ai-invoices', icon: InvoiceIcon, label: 'AI Invoices', badge: 'NEW' },
-    { path: '/ai-creative', icon: CreativeIcon, label: 'AI Creative', badge: 'NEW' },
-    { path: '/ai-analyst', icon: AnalystIcon, label: 'AI Analyst' },
-  ];
-
-  const toolsNavItems: NavItem[] = [
-    { path: '/email-system', icon: EmailIcon, label: 'Email System' },
-    { path: '/workflows', icon: WorkflowIcon, label: 'AI Workflows', badge: 'NEW' },
-    { path: '/autopilot', icon: AutopilotIcon, label: 'AutoPilot' },
-    { path: '/automation-rules', icon: AutomationIcon, label: 'Automation Rules' },
-    { path: '/document-parser', icon: ParserIcon, label: 'Document Parser' },
-    { path: '/voice-tools', icon: VoiceIcon, label: 'Voice Tools' },
-    { path: '/api-playground', icon: APIIcon, label: 'API Playground' },
-  ];
-
-  const developerNavItems: NavItem[] = [
-    { path: '/developer/skills', icon: Code, label: 'Dev Skill Tester', badge: 'BETA' },
-    { path: '/developer/simulation', icon: Bot, label: 'Admin Simulation', badge: 'BETA' },
-  ];
-
-  const superAdminNavItems: NavItem[] = [
-    { path: '/super-admin/command-center', icon: APIIcon, label: 'Command Center', badge: 'ROOT' },
-  ];
-
-  const adminNavItems: NavItem[] = [
-    { path: '/approvals', icon: ApprovalIcon, label: 'AI Approvals', badge: '5' },
-    { path: '/audit-logs', icon: AuditIcon, label: 'Audit Logs' },
-    { path: '/users', icon: Users, label: 'Users' },
-    { path: '/roles', icon: ShieldCheck, label: 'Roles & Permissions' },
-    { path: '/branches', icon: Building2, label: 'Branches' },
-    { path: '/settings', icon: Settings, label: 'Settings' },
-    { path: '/support', icon: SupportIcon, label: 'Support' },
-    { path: '/tutorial', icon: Book, label: 'Tutorial', badge: 'NEW' },
-  ];
-
-  const toggleMenu = (menuKey: string) => {
+  const toggleMenu = useCallback((menuKey: string) => {
     setExpandedMenus((prev) => {
       const next = new Set(prev);
       if (next.has(menuKey)) {
@@ -123,35 +139,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
       }
       return next;
     });
-  };
+  }, []);
 
-  const renderNavItem = (item: NavItem, isSubmenu = false) => {
+  const renderNavItem = useCallback((item: NavItem, isSubmenu = false) => {
     const Icon = item.icon;
     const isActive = location.pathname === item.path;
-    // No disabled state - all routes are active since pages exist
-    const isDisabled = false;
-
-    if (isDisabled) {
-      return (
-        <div
-          key={item.path}
-          className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all group opacity-50 cursor-not-allowed ${
-            isSubmenu ? 'py-2 text-sm' : ''
-          } ${isCollapsed ? 'justify-center px-2' : ''}`}
-          title={`${item.label} (Coming soon)`}
-        >
-          <Icon className="w-5 h-5 text-slate-500 shrink-0" />
-          {!isCollapsed && (
-            <>
-              <span className="flex-1 font-medium text-slate-500 truncate">{item.label}</span>
-              <span className="px-2 py-0.5 text-xs font-medium bg-slate-800 text-slate-400 rounded-full shrink-0">
-                SOON
-              </span>
-            </>
-          )}
-        </div>
-      );
-    }
 
     return (
       <NavLink
@@ -171,8 +163,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
             <span className="flex-1 font-medium truncate">{item.label}</span>
             {item.badge && (
               <span className={`px-2 py-0.5 text-xs font-medium rounded-full shrink-0 ${
-                item.badge === 'NEW' 
-                  ? 'bg-[#DC143C] text-white' 
+                item.badge === 'NEW'
+                  ? 'bg-[#DC143C] text-white'
                   : 'bg-slate-800 text-slate-400'
               }`}>
                 {item.badge}
@@ -183,9 +175,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
         )}
       </NavLink>
     );
-  };
+  }, [location.pathname, isCollapsed, onClose]);
 
-  const renderMenuSection = (title: string, icon: any, items: NavItem[], menuKey: string) => {
+  const renderMenuSection = useCallback((title: string, icon: React.ElementType, items: NavItem[], menuKey: string) => {
     const Icon = icon;
     const isExpanded = expandedMenus.has(menuKey);
 
@@ -216,13 +208,18 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
         )}
       </div>
     );
-  };
+  }, [expandedMenus, isCollapsed, onToggleCollapse, toggleMenu, renderNavItem]);
+
+  // Memoize sidebar className computation
+  const sidebarClassName = useMemo(() => (
+    `fixed top-0 left-0 z-50 h-full bg-[#0f172a] border-r border-slate-800/50 transform transition-all duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 ${isCollapsed ? 'w-20' : 'w-72'} overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 flex flex-col`
+  ), [isOpen, isCollapsed]);
 
   return (
     <>
       {isOpen && <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={onClose} />}
-      <aside className={`fixed top-0 left-0 z-50 h-full  bg-[#0f172a] border-r border-slate-800/50 transform transition-all duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 ${isCollapsed ? 'w-20' : 'w-72'} overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 flex flex-col`}>
-        <div className="sticky top-0 z-10  bg-[#0f172a] pb-4">
+      <aside className={sidebarClassName}>
+        <div className="sticky top-0 z-10 bg-[#0f172a] pb-4">
           <div className="h-16 flex items-center px-4 border-b border-slate-800/50">
             <div className={`flex items-center gap-3 ${isCollapsed ? 'mx-auto' : ''}`}>
               <div className="w-10 h-10 bg-gradient-to-br from-red-600 to-red-700 rounded-xl flex items-center justify-center shadow-lg shadow-red-500/20 shrink-0">
@@ -268,9 +265,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
           {renderMenuSection('Super Admin', Zap, superAdminNavItems, 'super-admin')}
         </nav>
 
-        <div className="sticky bottom-0  from-slate-950 to-slate-900/50 p-4 border-t border-slate-800/50">
+        <div className="sticky bottom-0 from-slate-950 to-slate-900/50 p-4 border-t border-slate-800/50">
           <button
-            onClick={() => navigate('/logout')}
+            onClick={handleLogout}
             title={isCollapsed ? 'Sign Out' : undefined}
             className={`flex items-center gap-3 w-full py-3 text-slate-400 hover:bg-red-500/10 hover:text-red-400 rounded-xl transition-all ${isCollapsed ? 'justify-center px-2' : 'px-4'}`}
           >

@@ -11,6 +11,7 @@ import {
   Crown, UserCheck
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../contexts/AuthContext';
 
 type UserRole = 'super_admin' | 'staff';
 
@@ -156,9 +157,18 @@ const LoginPage: React.FC = () => {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [selectedRole, setSelectedRole] = useState<UserRole>('super_admin');
 
-  // 2FA state
+  // 2FA state - simplified for demo
   const [show2FA, setShow2FA] = useState(false);
   const [isVerifying2FA, setIsVerifying2FA] = useState(false);
+
+  const { login, user } = useAuth();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard');
+    }
+  }, [user, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -178,39 +188,36 @@ const LoginPage: React.FC = () => {
         return;
       }
 
-      // Check against demo accounts
+      // Use AuthContext login - handles both demo and Supabase
+      await login(email, password);
+
+      // If demo account, skip 2FA and go directly to dashboard
       const account = DEMO_ACCOUNTS.find(a => a.email.toLowerCase() === email.toLowerCase());
+      const defaultPwd = DEFAULT_PASSWORDS[email.toLowerCase()];
 
-      if (!account) {
-        // Check if using default password
-        const defaultPwd = DEFAULT_PASSWORDS[email.toLowerCase()];
-        if (defaultPwd && password === defaultPwd) {
-          // First time login with default - trigger 2FA
-          // Auto-detect role based on email
-          const defaultRole = email.toLowerCase().includes('admin') ? 'super_admin' : 'staff';
-          setSelectedRole(defaultRole);
-          setShow2FA(true);
-          setIsSubmitting(false);
-          return;
+      if (account && password === account.password) {
+        // Demo account - skip 2FA
+        if (rememberMe) {
+          localStorage.setItem('airpak_remember', 'true');
         }
-        setLoginError('Invalid email or password');
-        setIsSubmitting(false);
-        return;
+        toast.success('Login successful!');
+        navigate('/dashboard');
+      } else if (defaultPwd && password === defaultPwd) {
+        // Default password account
+        if (rememberMe) {
+          localStorage.setItem('airpak_remember', 'true');
+        }
+        toast.success('Login successful!');
+        navigate('/dashboard');
+      } else {
+        // Non-demo account - require 2FA
+        setSelectedRole(email.toLowerCase().includes('admin') ? 'super_admin' : 'staff');
+        setShow2FA(true);
       }
-
-      if (password !== account.password) {
-        setLoginError('Invalid email or password');
-        setIsSubmitting(false);
-        return;
-      }
-
-      // Password verified - auto-detect role from account and trigger 2FA
-      setSelectedRole(account.role);
-      setShow2FA(true);
-      setIsSubmitting(false);
-
     } catch (err: any) {
       setLoginError(err.message || 'Authentication failed');
+      toast.error(err.message || 'Login failed');
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -219,37 +226,16 @@ const LoginPage: React.FC = () => {
     setIsVerifying2FA(true);
     setTimeout(() => {
       if (code.length === 6) {
-        completeLogin(email, selectedRole);
+        if (rememberMe) {
+          localStorage.setItem('airpak_remember', 'true');
+        }
+        toast.success('Login successful!');
+        navigate('/dashboard');
       } else {
         toast.error('Invalid verification code');
-        setIsVerifying2FA(false);
       }
+      setIsVerifying2FA(false);
     }, 1000);
-  };
-
-  const completeLogin = (userEmail: string, role: UserRole) => {
-    const account = DEMO_ACCOUNTS.find(a => a.email.toLowerCase() === userEmail.toLowerCase());
-    const name = account?.name || 'User';
-
-    const user = {
-      id: role === 'super_admin' ? 'admin-001' : 'staff-001',
-      email: userEmail,
-      full_name: name,
-      role: role,
-      created_at: new Date().toISOString(),
-      two_factor_enabled: true,
-    };
-
-    localStorage.setItem('airpak_user', JSON.stringify(user));
-    localStorage.setItem('airpak_auth_token', `token_${Date.now()}`);
-
-    if (rememberMe) {
-      localStorage.setItem('airpak_remember', 'true');
-    }
-
-    toast.success(`Welcome back, ${name}!`);
-    navigate('/dashboard');
-    window.location.reload();
   };
 
   const handleQuickLogin = (role: UserRole) => {

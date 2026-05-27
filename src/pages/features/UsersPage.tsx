@@ -12,6 +12,7 @@ import {
   Zap, RefreshCw, Video, FileText, Phone, Globe, Star, Users
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import toast from 'react-hot-toast';
 
 interface UserProfile {
   id: string;
@@ -463,7 +464,7 @@ const UsersPage: React.FC = () => {
     addNotification(`Email sent to ${user.full_name}`, 'email', user.id);
   };
 
-  // Add Notification
+  // Add Notification with toast
   const addNotification = (message: string, type: string, userId: string) => {
     const notification = {
       id: `notif_${Date.now()}`,
@@ -473,6 +474,48 @@ const UsersPage: React.FC = () => {
       timestamp: new Date().toISOString()
     };
     setNotifications(prev => [notification, ...prev.slice(0, 49)]);
+
+    // Show toast based on action type
+    switch (type) {
+      case 'create':
+        toast.success(message);
+        break;
+      case 'update':
+        toast.success(message);
+        break;
+      case 'delete':
+        toast.success(message);
+        break;
+      case 'block':
+        toast.error(message);
+        break;
+      case 'suspend':
+        toast.error(message); // Use error for suspend
+        break;
+      case 'activate':
+        toast.success(message);
+        break;
+      case 'verify':
+        toast.success(message);
+        break;
+      case 'hold':
+        toast.error(message); // Use error for hold
+        break;
+      case 'unhold':
+        toast.success(message);
+        break;
+      case 'email':
+        toast.success(message);
+        break;
+      case 'notice':
+        toast.success(message);
+        break;
+      case 'upgrade':
+        toast.success(message);
+        break;
+      default:
+        toast(message);
+    }
   };
 
   // Open action modals

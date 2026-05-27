@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Filter, Shield, ShieldOff, Ban, Key, Trash2, MoreVertical, CheckCircle, X, Edit, Save, UserPlus, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import toast from 'react-hot-toast';
 
 interface User {
   id: string;
@@ -65,8 +66,17 @@ export const UserManagement: React.FC = () => {
     }
   };
 
-  const addNotification = (msg: string) => {
+  const addNotification = (msg: string, type: 'success' | 'error' | 'warning' = 'success') => {
     setNotifications(prev => [`${new Date().toLocaleTimeString()}: ${msg}`, ...prev.slice(0, 4)]);
+
+    // Show toast based on message content
+    if (msg.toLowerCase().includes('deleted') || msg.toLowerCase().includes('blocked')) {
+      toast.error(msg);
+    } else if (msg.toLowerCase().includes('suspended')) {
+      toast.error(msg); // Use error for suspended
+    } else {
+      toast.success(msg);
+    }
   };
 
   const filteredUsers = users.filter(user => {
@@ -84,15 +94,50 @@ export const UserManagement: React.FC = () => {
   };
 
   const handleSaveEdit = async () => {
-    if (!selectedUser) return;
+    if (!editData.name.trim() || !editData.email.trim()) {
+      alert('Name and email are required');
+      return;
+    }
 
-    const updatedUsers: User[] = users.map(u => u.id === selectedUser.id ? { ...u, role: editData.role as User['role'], tier: editData.tier as User['tier'], status: editData.status as User['status'], name: editData.name } : u);
+    if (!selectedUser) {
+      // Create new user
+      const newUser: User = {
+        id: crypto.randomUUID(),
+        name: editData.name,
+        email: editData.email,
+        role: editData.role as User['role'],
+        tier: editData.tier as User['tier'],
+        status: editData.status as User['status'],
+        verified: false,
+        lastLogin: 'Never',
+        created: new Date().toISOString().split('T')[0]
+      };
+      setUsers([newUser, ...users]);
+
+      try {
+        await supabase.from('profiles').insert([{
+          id: newUser.id,
+          full_name: editData.name,
+          email: editData.email,
+          role: editData.role,
+          tier: editData.tier,
+          status: editData.status
+        }]);
+      } catch (e) {}
+
+      addNotification(`Created user: ${editData.name}`);
+      setShowEditModal(false);
+      return;
+    }
+
+    const updatedUsers: User[] = users.map(u => u.id === selectedUser.id ? { ...u, role: editData.role as User['role'], tier: editData.tier as User['tier'], status: editData.status as User['status'], name: editData.name, email: editData.email } : u);
     setUsers(updatedUsers);
 
     // Save to Supabase
     try {
       await supabase.from('profiles').update({
         full_name: editData.name,
+        email: editData.email,
         role: editData.role,
         tier: editData.tier,
         status: editData.status,
@@ -296,10 +341,13 @@ export const UserManagement: React.FC = () => {
                         {user.status === 'active' ? <ShieldOff className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
                       </button>
                       {user.status !== 'blocked' && (
-                        <button onClick={() => { setSelectedUser(user); setShowDeleteModal(true); }} className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Block">
+                        <button onClick={() => handleBlock(user)} className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Block">
                           <Ban className="w-4 h-4" />
                         </button>
                       )}
+                      <button onClick={() => { setSelectedUser(user); setShowDeleteModal(true); }} className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-colors" title="Delete">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
                   </td>
                 </motion.tr>
@@ -439,11 +487,11 @@ export const UserManagement: React.FC = () => {
                 <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-4">
                   <AlertTriangle className="w-8 h-8 text-red-500" />
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2">Confirm Block User</h3>
-                <p className="text-gray-400 mb-6">Are you sure you want to block <span className="text-white font-semibold">{selectedUser.name}</span>? This action can be reversed.</p>
+                <h3 className="text-xl font-bold text-white mb-2">Confirm Delete User</h3>
+                <p className="text-gray-400 mb-6">Are you sure you want to delete <span className="text-white font-semibold">{selectedUser.name}</span>? This action cannot be reversed.</p>
                 <div className="flex gap-3 w-full">
                   <button onClick={handleDelete} className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors">
-                    Yes, Block User
+                    Yes, Delete User
                   </button>
                   <button onClick={() => setShowDeleteModal(false)} className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 text-gray-300 font-medium rounded-lg transition-colors">
                     Cancel

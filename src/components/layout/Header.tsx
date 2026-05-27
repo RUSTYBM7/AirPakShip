@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Menu, Bell, Search, ChevronDown, User, Settings, LogOut, Moon, Sun } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -8,37 +8,63 @@ interface HeaderProps {
   onMenuClick: () => void;
 }
 
+// Memoized notification data to prevent recreation on re-renders
+const mockNotifications = [
+  { id: 1, title: 'AI Document Generated', description: 'Invoice #INV-2024-0156 created', time: '2 min ago', type: 'ai', read: false },
+  { id: 2, title: 'Shipment Delayed', description: 'APK001234 delayed due to weather', time: '15 min ago', type: 'alert', read: false },
+  { id: 3, title: 'New Business Registration', description: 'ABC Logistics pending KYC review', time: '1 hour ago', type: 'info', read: true },
+  { id: 4, title: 'AutoPilot Alert', description: 'Route change suggested for APK001240', time: '2 hours ago', type: 'ai', read: true },
+] as const;
+
+const getNotificationIcon = (type: string): string => {
+  switch (type) {
+    case 'ai': return '🤖';
+    case 'alert': return '⚠️';
+    default: return 'ℹ️';
+  }
+};
+
 const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
 
-  // Mock notifications
-  const notifications = [
-    { id: 1, title: 'AI Document Generated', description: 'Invoice #INV-2024-0156 created', time: '2 min ago', type: 'ai', read: false },
-    { id: 2, title: 'Shipment Delayed', description: 'APK001234 delayed due to weather', time: '15 min ago', type: 'alert', read: false },
-    { id: 3, title: 'New Business Registration', description: 'ABC Logistics pending KYC review', time: '1 hour ago', type: 'info', read: true },
-    { id: 4, title: 'AutoPilot Alert', description: 'Route change suggested for APK001240', time: '2 hours ago', type: 'ai', read: true },
-  ];
+  // Memoize notification count
+  const unreadCount = useMemo(() =>
+    mockNotifications.filter(n => !n.read).length,
+  []);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  // Memoized handlers to prevent unnecessary re-renders
+  const handleToggleNotifications = useCallback(() => {
+    setShowNotifications(prev => !prev);
+    if (showProfile) setShowProfile(false);
+  }, [showProfile]);
 
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'ai': return '🤖';
-      case 'alert': return '⚠️';
-      default: return 'ℹ️';
+  const handleToggleProfile = useCallback(() => {
+    setShowProfile(prev => !prev);
+    if (showNotifications) setShowNotifications(false);
+  }, [showNotifications]);
+
+  const handleCloseDropdowns = useCallback(() => {
+    setShowNotifications(false);
+    setShowProfile(false);
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    try {
+      if (user) {
+        await logout();
+      }
+    } catch (e) {
+      console.error('Logout error:', e);
     }
-  };
-
-  const handleLogout = () => {
     localStorage.removeItem('airpak_user');
     localStorage.removeItem('airpak_auth_token');
+    localStorage.removeItem('airpak_demo_user');
     navigate('/login');
-    window.location.reload();
-  };
+  }, [user, logout, navigate]);
 
   return (
     <header className="h-16 bg-gradient-to-r from-slate-900 to-slate-900/90 backdrop-blur-sm border-b border-slate-800/50 flex items-center justify-between px-4 lg:px-6 sticky top-0 z-30">
@@ -85,7 +111,6 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
           ) : (
             <Sun className="w-5 h-5 text-slate-400 group-hover:text-yellow-400 transition-colors" />
           )}
-          {/* Tooltip */}
           <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-800 text-xs text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
             {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
           </div>
@@ -94,7 +119,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
         {/* Notifications */}
         <div className="relative">
           <button
-            onClick={() => setShowNotifications(!showNotifications)}
+            onClick={handleToggleNotifications}
             className="relative p-2 hover:bg-slate-800 rounded-lg transition-colors"
           >
             <Bell className="w-5 h-5 text-slate-400" />
@@ -109,7 +134,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
             <>
               <div
                 className="fixed inset-0 z-40"
-                onClick={() => setShowNotifications(false)}
+                onClick={handleCloseDropdowns}
               />
               <div className="absolute right-0 mt-2 w-96 bg-slate-800 rounded-xl border border-slate-700 shadow-2xl z-50 overflow-hidden">
                 <div className="p-4 border-b border-slate-700 flex items-center justify-between">
@@ -117,7 +142,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
                   <button className="text-xs text-red-400 hover:text-red-300">Mark all read</button>
                 </div>
                 <div className="max-h-96 overflow-y-auto">
-                  {notifications.map((notif) => (
+                  {mockNotifications.map((notif) => (
                     <div
                       key={notif.id}
                       className={`p-4 border-b border-slate-700/50 hover:bg-slate-700/50 cursor-pointer transition-colors ${
@@ -154,7 +179,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
         {/* Profile */}
         <div className="relative">
           <button
-            onClick={() => setShowProfile(!showProfile)}
+            onClick={handleToggleProfile}
             className="flex items-center gap-3 p-2 hover:bg-slate-800 rounded-lg transition-colors"
           >
             <div className="w-8 h-8 bg-gradient-to-br from-red-600 to-red-700 rounded-full flex items-center justify-center shadow-lg shadow-red-500/20">
@@ -173,7 +198,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
             <>
               <div
                 className="fixed inset-0 z-40"
-                onClick={() => setShowProfile(false)}
+                onClick={handleCloseDropdowns}
               />
               <div className="absolute right-0 mt-2 w-64 bg-slate-800 rounded-xl border border-slate-700 shadow-2xl z-50 overflow-hidden">
                 <div className="p-4 border-b border-slate-700">

@@ -35,4 +35,4 @@ dist-ssr
 *.key
 *.pem
 credentials.json
-secrets.json
+secrets.json.vercel_token
