@@ -1,6 +1,6 @@
-import React, { Suspense, lazy, useCallback, useMemo } from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import DashboardLayout from './components/layout/DashboardLayout';
 import LoginPage from './pages/auth/LoginPage';
@@ -48,29 +48,19 @@ const PageLoader: React.FC = () => (
   </div>
 );
 
-// Protected Route wrapper - optimized to prevent unnecessary re-renders
+// Protected Route wrapper - uses AuthContext to avoid race conditions
 const ProtectedRoute: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = React.useState<boolean | null>(null);
+  const { user, loading } = useAuth();
 
-  React.useEffect(() => {
-    // Check auth status synchronously on mount
-    const token = localStorage.getItem('airpak_auth_token');
-    const user = localStorage.getItem('airpak_user');
-    setIsAuthenticated(token && user ? true : false);
-  }, []);
+  if (loading) {
+    return <PageLoader />;
+  }
 
-  // Memoize the loading state
-  const content = useMemo(() => {
-    if (isAuthenticated === null) {
-      return <PageLoader />;
-    }
-    if (isAuthenticated === false) {
-      return <Navigate to="/login" replace />;
-    }
-    return <Outlet />;
-  }, [isAuthenticated]);
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
 
-  return content;
+  return <Outlet />;
 };
 
 // Settings page also used for forgot-password - lazy loaded

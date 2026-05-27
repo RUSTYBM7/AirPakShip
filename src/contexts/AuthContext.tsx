@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, memo, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { Role, hasPermission, getAccessibleResources, getResourceActions } from '../lib/rbac';
 import { createAuditLog } from '../services/audit';
@@ -56,7 +56,7 @@ const createRBACHelpers = (user: User | null) => ({
   },
 });
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = memo(({ children }) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -275,8 +275,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = memo(({ chi
       {children}
     </AuthContext.Provider>
   );
-});
-
-AuthProvider.displayName = 'AuthProvider';
+};
 
 export default AuthProvider;
